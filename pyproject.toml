@@ -1,0 +1,18 @@
+[project]
+name = "employment-scheduler"
+version = "0.1.0"
+description = "Local CLI pipeline for collecting employment posts."
+requires-python = ">=3.12"
+dependencies = [
+  "beautifulsoup4",
+  "httpx",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
