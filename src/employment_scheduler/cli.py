@@ -22,7 +22,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--date",
         default=None,
-        help="Target date in YYYY-MM-DD format. Defaults to the local date.",
+        help="Collection window end date in YYYY-MM-DD format. "
+        "Collects posts from the previous day. Defaults to the local date.",
     )
     parser.add_argument(
         "--dry-run",

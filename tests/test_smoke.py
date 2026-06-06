@@ -1,6 +1,6 @@
 from employment_scheduler.cli import parse_options
 from employment_scheduler.normalization import normalize_link
-from employment_scheduler.sources.inthiswork import build_posts_params
+from employment_scheduler.sources.inthiswork import build_it_posts_params
 
 
 def test_parse_options_accepts_source_and_date() -> None:
@@ -12,7 +12,7 @@ def test_parse_options_accepts_source_and_date() -> None:
 
 def test_inthiswork_params_use_categories_key() -> None:
     options = parse_options(["--date", "2026-06-04"])
-    params = build_posts_params(options.target_date)
+    params = build_it_posts_params(options.target_date)
 
     assert params["categories"] == "191700167"
     assert "caegories" not in params
