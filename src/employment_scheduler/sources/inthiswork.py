@@ -26,7 +26,7 @@ def build_it_posts_params(
         "categories": "191700167",
         "per_page": per_page,
         "page": page,
-        "_fields": "id,date,modified,link,title,categories,tags,excerpt",
+        "_fields": "id,date,modified,link,title,categories,tags,excerpt,content",
         "after": f"{before_date.isoformat()}T00:00:00",
         "before": f"{target_date.isoformat()}T00:00:00",
     }
