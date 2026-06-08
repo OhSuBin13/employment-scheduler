@@ -8,9 +8,6 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from employment_scheduler.models import NormalizedLink
 
 
-TRACKING_PARAMS = {"fbclid", "gclid"}
-
-
 def normalize_link(source_key: str, original_url: str) -> NormalizedLink:
     parsed = urlsplit(original_url)
     scheme = parsed.scheme.lower() or "https"
@@ -18,11 +15,7 @@ def normalize_link(source_key: str, original_url: str) -> NormalizedLink:
     port = f":{parsed.port}" if parsed.port and parsed.port not in (80, 443) else ""
     netloc = f"{host}{port}"
 
-    query_items = [
-        (key, value)
-        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
-        if not key.startswith("utm_") and key not in TRACKING_PARAMS
-    ]
+    query_items = [(key, value) for key, value in parse_qsl(parsed.query)]
     query = urlencode(sorted(query_items), doseq=True)
 
     path = parsed.path or "/"

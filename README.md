@@ -31,4 +31,10 @@ python scripts/collect_today.py --source inthiswork --date 2026-06-04
 python scripts/collect_today.py --source inthiswork --dry-run
 ```
 
-The current files define the project skeleton only. Collection, storage, and normalization modules are separated so the implementation can be filled in incrementally.
+The current implementation collects Inthiswork IT posts and stores normalized records in SQLite:
+
+- `data/employment.sqlite` is the default local database path.
+- `migrations/001_init.sql` defines sources, collection runs, normalized job posts, and source records.
+- Raw source payloads are stored in `source_records.raw_json` for traceability.
+
+Generated SQLite files are ignored by git.

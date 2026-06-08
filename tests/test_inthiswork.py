@@ -5,6 +5,7 @@ import pytest
 
 from employment_scheduler.sources.inthiswork import (
     BASE_URL,
+    build_it_post_record,
     build_it_posts_params,
     fetch_it_posts,
 )
@@ -75,3 +76,28 @@ def test_fetch_it_posts_rejects_non_dict_items() -> None:
 
     with pytest.raises(ValueError, match="Expected a list"):
         fetch_it_posts(client, date(2026, 6, 4))
+
+
+def test_build_it_post_record_normalizes_rendered_fields() -> None:
+    record = build_it_post_record(
+        {
+            "id": 351552,
+            "date": "2026-06-03T09:00:00",
+            "modified": "2026-06-03T10:00:00",
+            "link": "https://inthiswork.com/archives/351552?utm_source=newsletter",
+            "title": {"rendered": "백엔드 &amp; 플랫폼 개발자"},
+            "categories": [191700167],
+            "tags": [191700187],
+            "excerpt": {"rendered": "<p>Python 개발자를 채용합니다.</p>"},
+        },
+        date(2026, 6, 4),
+    )
+
+    assert record.external_id == "351552"
+    assert record.title == "백엔드 & 플랫폼 개발자"
+    assert record.normalized_url == "https://inthiswork.com/archives/351552"
+    assert record.source_published_at == "2026-06-03T09:00:00"
+    assert record.source_modified_at == "2026-06-03T10:00:00"
+    assert record.categories == (191700167,)
+    assert record.tags == (191700187,)
+    assert record.excerpt_text == "Python 개발자를 채용합니다."
