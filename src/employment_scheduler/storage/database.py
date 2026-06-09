@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from employment_scheduler.models import CollectedPost
+from employment_scheduler.storage.models import DatabaseStorageResult
 
 DEFAULT_DB_PATH = Path("data/employment.sqlite")
 DEFAULT_MIGRATION_PATH = (
@@ -29,16 +29,6 @@ SOURCE_METADATA: dict[str, dict[str, Any]] = {
         },
     },
 }
-
-
-@dataclass(frozen=True)
-class DatabaseStorageResult:
-    db_path: Path
-    fetched_count: int
-    unique_count: int
-    inserted_count: int
-    updated_count: int
-    duplicate_count: int
 
 
 class DatabaseStorage:

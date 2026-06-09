@@ -10,7 +10,6 @@ from datetime import date
 class CollectionOptions:
     source: str
     target_date: date
-    dry_run: bool = False
 
 
 @dataclass(frozen=True)

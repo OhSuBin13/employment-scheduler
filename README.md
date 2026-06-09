@@ -28,7 +28,6 @@ employment-scheduler/
 
 ```bash
 python scripts/collect_today.py --source inthiswork --date 2026-06-04
-python scripts/collect_today.py --source inthiswork --dry-run
 python scripts/analyze_apply_urls.py --source inthiswork --limit 3
 python scripts/analyze_apply_urls.py --job-post-id 1 --force
 ```

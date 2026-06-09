@@ -1,4 +1,4 @@
-from employment_scheduler.cli import parse_options
+from employment_scheduler.collection.cli import parse_options
 from employment_scheduler.normalization import normalize_link
 from employment_scheduler.sources.inthiswork import build_it_posts_params
 

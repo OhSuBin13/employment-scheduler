@@ -10,6 +10,8 @@ import httpx
 from employment_scheduler.models import CollectionOptions
 from employment_scheduler.sources.inthiswork import (
     SOURCE_KEY as INTHISWORK_SOURCE_KEY,
+)
+from employment_scheduler.sources.inthiswork import (
     build_it_post_records,
     fetch_it_posts,
 )
@@ -21,13 +23,6 @@ def run_collection(
     storage: DatabaseStorage | None = None,
     client: httpx.Client | None = None,
 ) -> int:
-    if options.dry_run:
-        print(
-            "dry-run: "
-            f"source={options.source} "
-            f"target_date={options.target_date.isoformat()}"
-        )
-        return 0
 
     if options.source != INTHISWORK_SOURCE_KEY:
         raise ValueError(f"Unsupported source: {options.source}")

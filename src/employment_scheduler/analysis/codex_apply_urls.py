@@ -5,62 +5,21 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sqlite3
 import subprocess
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
+import employment_scheduler.analysis.constants as analysis_constants
+from employment_scheduler.analysis.models import (
+    CodexApplyUrlAnalysisOptions,
+    CodexApplyUrlAnalysisResult,
+    JobPostAnalysisTarget,
+)
+from employment_scheduler.analysis.prompts import build_analysis_prompt
+from employment_scheduler.analysis.repository import select_analysis_targets
 from employment_scheduler.storage.database import DEFAULT_DB_PATH
 
-DEFAULT_OUTPUT_DIR = Path("data/analysis/apply_urls")
-DEFAULT_CODEX_BIN = "codex"
-DEFAULT_CODEX_MODEL = "gpt-5.5"
-DEFAULT_REASONING_EFFORT = "xhigh"
-DEFAULT_SERVICE_TIER = "priority"
-DEFAULT_SANDBOX = "read-only"
-
-AnalysisStatus = Literal["analyzed", "planned", "skipped"]
 CommandRunner = Callable[[Sequence[str], str], subprocess.CompletedProcess[str]]
-
-
-@dataclass(frozen=True)
-class JobPostAnalysisTarget:
-    job_post_id: int
-    source_key: str
-    external_id: str
-    apply_url: str
-    apply_url_hash: str
-    first_seen_at: str
-    last_seen_at: str
-
-
-@dataclass(frozen=True)
-class CodexApplyUrlAnalysisOptions:
-    db_path: Path = DEFAULT_DB_PATH
-    output_dir: Path = DEFAULT_OUTPUT_DIR
-    source: str | None = None
-    job_post_ids: tuple[int, ...] = ()
-    limit: int | None = None
-    force: bool = False
-    dry_run: bool = False
-    codex_bin: str = DEFAULT_CODEX_BIN
-    model: str = DEFAULT_CODEX_MODEL
-    reasoning_effort: str = DEFAULT_REASONING_EFFORT
-    service_tier: str = DEFAULT_SERVICE_TIER
-    sandbox: str = DEFAULT_SANDBOX
-    enable_search: bool = True
-    extra_codex_args: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class CodexApplyUrlAnalysisResult:
-    target: JobPostAnalysisTarget
-    output_path: Path
-    prompt_path: Path
-    status: AnalysisStatus
-    command: tuple[str, ...]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -77,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=DEFAULT_OUTPUT_DIR,
+        default=analysis_constants.DEFAULT_OUTPUT_DIR,
         help="Directory for Markdown reports. Defaults to data/analysis/apply_urls.",
     )
     parser.add_argument(
@@ -111,22 +70,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--codex-bin",
-        default=DEFAULT_CODEX_BIN,
+        default=analysis_constants.DEFAULT_CODEX_BIN,
         help="Codex executable name or path. Defaults to codex.",
     )
     parser.add_argument(
         "--model",
-        default=DEFAULT_CODEX_MODEL,
-        help=f"Codex model. Defaults to {DEFAULT_CODEX_MODEL}.",
+        default=analysis_constants.DEFAULT_CODEX_MODEL,
+        help=f"Codex model. Defaults to {analysis_constants.DEFAULT_CODEX_MODEL}.",
     )
     parser.add_argument(
         "--reasoning-effort",
-        default=DEFAULT_REASONING_EFFORT,
-        help=f"Codex reasoning effort. Defaults to {DEFAULT_REASONING_EFFORT}.",
+        default=analysis_constants.DEFAULT_REASONING_EFFORT,
+        help=f"Codex reasoning effort. Defaults to {analysis_constants.DEFAULT_REASONING_EFFORT}.",
     )
     parser.add_argument(
         "--service-tier",
-        default=DEFAULT_SERVICE_TIER,
+        default=analysis_constants.DEFAULT_SERVICE_TIER,
         help=(
             "Codex service tier. Defaults to priority, the local CLI catalog's "
             "Fast tier id."
@@ -134,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--sandbox",
-        default=DEFAULT_SANDBOX,
+        default=analysis_constants.DEFAULT_SANDBOX,
         choices=("read-only", "workspace-write", "danger-full-access"),
         help="Sandbox mode for the Codex exec process. Defaults to read-only.",
     )
@@ -233,9 +192,10 @@ def run_apply_url_analysis(
         if not output_path.exists() and completed.stdout.strip():
             output_path.write_text(completed.stdout, encoding="utf-8")
 
-        if not output_path.exists() or not output_path.read_text(
-            encoding="utf-8"
-        ).strip():
+        if (
+            not output_path.exists()
+            or not output_path.read_text(encoding="utf-8").strip()
+        ):
             raise RuntimeError(
                 "Codex analysis did not produce an output file for "
                 f"job_post_id={target.job_post_id}: {output_path}"
@@ -252,102 +212,6 @@ def run_apply_url_analysis(
         )
 
     return results
-
-
-def select_analysis_targets(
-    db_path: Path,
-    source: str | None = None,
-    job_post_ids: tuple[int, ...] = (),
-    limit: int | None = None,
-) -> list[JobPostAnalysisTarget]:
-    if not db_path.exists():
-        raise FileNotFoundError(f"SQLite database does not exist: {db_path}")
-
-    where_clauses: list[str] = []
-    params: list[str | int] = []
-
-    if source is not None:
-        where_clauses.append("sources.key = ?")
-        params.append(source)
-
-    if job_post_ids:
-        placeholders = ", ".join("?" for _ in job_post_ids)
-        where_clauses.append(f"job_posts.id IN ({placeholders})")
-        params.extend(job_post_ids)
-
-    where_sql = ""
-    if where_clauses:
-        where_sql = "WHERE " + " AND ".join(where_clauses)
-
-    limit_sql = ""
-    if limit is not None:
-        limit_sql = "LIMIT ?"
-        params.append(limit)
-
-    query = f"""
-        SELECT
-          job_posts.id AS job_post_id,
-          sources.key AS source_key,
-          job_posts.external_id,
-          job_posts.apply_url,
-          job_posts.apply_url_hash,
-          job_posts.first_seen_at,
-          job_posts.last_seen_at
-        FROM job_posts
-        JOIN sources ON sources.id = job_posts.source_id
-        {where_sql}
-        ORDER BY job_posts.id
-        {limit_sql}
-    """
-
-    connection = sqlite3.connect(db_path)
-    connection.row_factory = sqlite3.Row
-    try:
-        rows = connection.execute(query, params).fetchall()
-    finally:
-        connection.close()
-
-    return [
-        JobPostAnalysisTarget(
-            job_post_id=int(row["job_post_id"]),
-            source_key=str(row["source_key"]),
-            external_id=str(row["external_id"]),
-            apply_url=str(row["apply_url"]),
-            apply_url_hash=str(row["apply_url_hash"]),
-            first_seen_at=str(row["first_seen_at"]),
-            last_seen_at=str(row["last_seen_at"]),
-        )
-        for row in rows
-    ]
-
-
-def build_analysis_prompt(target: JobPostAnalysisTarget) -> str:
-    return f"""\
-You are analyzing one employment application page collected by the local employment-scheduler pipeline.
-
-Open and inspect the apply URL when web access is available. If the page is unavailable, blocked, dynamic, or not directly inspectable, state that clearly and do not invent details.
-
-Return a Korean Markdown report with these sections:
-
-1. 기본 정보
-2. 회사 및 포지션 추정
-3. 주요 업무
-4. 자격 요건
-5. 우대 사항 및 기술 키워드
-6. 지원 판단 메모
-7. 확인 불가 또는 리스크
-
-Keep the report concise but evidence-based. Include the source URL and any uncertainty.
-
-Collected job post metadata:
-
-- job_posts.id: {target.job_post_id}
-- source: {target.source_key}
-- external_id: {target.external_id}
-- apply_url: {target.apply_url}
-- first_seen_at: {target.first_seen_at}
-- last_seen_at: {target.last_seen_at}
-"""
 
 
 def build_codex_command(
@@ -385,8 +249,7 @@ def build_codex_command(
 def build_output_path(output_dir: Path, target: JobPostAnalysisTarget) -> Path:
     external_id = _safe_slug(target.external_id)
     return output_dir / (
-        f"job-post-{target.job_post_id}-{external_id}-"
-        f"{target.apply_url_hash[:12]}.md"
+        f"job-post-{target.job_post_id}-{external_id}-{target.apply_url_hash[:12]}.md"
     )
 
 

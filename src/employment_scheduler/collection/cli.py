@@ -25,11 +25,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Collection window end date in YYYY-MM-DD format. "
         "Collects posts from the previous day. Defaults to the local date.",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Build collection options without writing data.",
-    )
     return parser
 
 
@@ -39,7 +34,6 @@ def parse_options(argv: list[str] | None = None) -> CollectionOptions:
     return CollectionOptions(
         source=args.source,
         target_date=target_date,
-        dry_run=args.dry_run,
     )
 
 
