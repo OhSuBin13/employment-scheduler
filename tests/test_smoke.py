@@ -26,3 +26,13 @@ def test_normalize_inthiswork_archive_url_removes_tracking_query() -> None:
 
     assert result.normalized_url == "https://inthiswork.com/archives/351552"
     assert result.normalization_rule == "inthiswork_archives"
+
+
+def test_normalize_apply_url_removes_tracking_query() -> None:
+    result = normalize_link(
+        "apply_url",
+        "https://jobs.example.com/apply?UTM_Source=x&position=backend&fbclid=y",
+    )
+
+    assert result.normalized_url == "https://jobs.example.com/apply?position=backend"
+    assert result.normalization_rule == "apply_url"

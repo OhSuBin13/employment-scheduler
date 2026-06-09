@@ -19,7 +19,7 @@ def test_build_it_posts_params_uses_expected_filters() -> None:
         "categories": "191700167",
         "per_page": 50,
         "page": 2,
-        "_fields": "id,date,modified,link,title,categories,tags,excerpt",
+        "_fields": "id,content.rendered",
         "after": "2026-06-03T00:00:00",
         "before": "2026-06-04T00:00:00",
     }
@@ -43,6 +43,7 @@ def test_fetch_it_posts_requests_posts_with_expected_options() -> None:
     assert captured_request.headers["Accept"] == "application/json"
     assert captured_request.url.params["tags"] == "191700187"
     assert captured_request.url.params["categories"] == "191700167"
+    assert captured_request.url.params["_fields"] == "id,content.rendered"
     assert captured_request.url.params["after"] == "2026-06-03T00:00:00"
     assert captured_request.url.params["before"] == "2026-06-04T00:00:00"
 
@@ -78,26 +79,43 @@ def test_fetch_it_posts_rejects_non_dict_items() -> None:
         fetch_it_posts(client, date(2026, 6, 4))
 
 
-def test_build_it_post_record_normalizes_rendered_fields() -> None:
+def test_build_it_post_record_extracts_apply_link() -> None:
+    apply_url = (
+        "https://makinarocks.career.greetinghr.com/ko/o/157208"
+        "?utm_source=inthiswork&ref=job-list&fbclid=abc"
+    )
     record = build_it_post_record(
         {
             "id": 351552,
-            "date": "2026-06-03T09:00:00",
-            "modified": "2026-06-03T10:00:00",
-            "link": "https://inthiswork.com/archives/351552?utm_source=newsletter",
-            "title": {"rendered": "백엔드 &amp; 플랫폼 개발자"},
-            "categories": [191700167],
-            "tags": [191700187],
-            "excerpt": {"rendered": "<p>Python 개발자를 채용합니다.</p>"},
+            "content": {
+                "rendered": (
+                    f'<p><a href="{apply_url}">'
+                    "지원하러 가기"
+                    "</a></p>"
+                )
+            },
         },
         date(2026, 6, 4),
     )
 
     assert record.external_id == "351552"
-    assert record.title == "백엔드 & 플랫폼 개발자"
-    assert record.normalized_url == "https://inthiswork.com/archives/351552"
-    assert record.source_published_at == "2026-06-03T09:00:00"
-    assert record.source_modified_at == "2026-06-03T10:00:00"
-    assert record.categories == (191700167,)
-    assert record.tags == (191700187,)
-    assert record.excerpt_text == "Python 개발자를 채용합니다."
+    assert (
+        record.apply_link.normalized_url
+        == "https://makinarocks.career.greetinghr.com/ko/o/157208?ref=job-list"
+    )
+    assert record.apply_link.normalization_rule == "apply_url"
+
+
+def test_build_it_post_record_requires_apply_link() -> None:
+    with pytest.raises(ValueError, match="지원하러 가기"):
+        build_it_post_record(
+            {
+                "id": 351553,
+                "content": {
+                    "rendered": (
+                        '<p><a href="https://example.com/company">회사 소개</a></p>'
+                    )
+                },
+            },
+            date(2026, 6, 4),
+        )

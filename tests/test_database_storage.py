@@ -1,33 +1,40 @@
-import json
 from datetime import date
 
 from employment_scheduler.models import CollectedPost
-from employment_scheduler.storage.database import DatabaseStorage, connect
+from employment_scheduler.normalization import normalize_link
+from employment_scheduler.storage.database import DatabaseStorage, connect, initialize_database
 
 
-def test_database_storage_writes_run_posts_and_records(tmp_path) -> None:
-    record = CollectedPost(
+def _record(
+    external_id: str,
+    apply_url: str,
+    target_date: date = date(2026, 6, 4),
+) -> CollectedPost:
+    return CollectedPost(
         source="inthiswork",
-        external_id="1",
-        title="Backend Engineer",
-        original_url="https://inthiswork.com/archives/1?utm_source=x",
-        normalized_url="https://inthiswork.com/archives/1",
-        normalized_url_hash="hash-1",
-        normalization_rule="inthiswork_archives",
-        collected_date=date(2026, 6, 4),
-        source_published_at="2026-06-03T09:00:00",
-        categories=(191700167,),
-        tags=(191700187,),
+        external_id=external_id,
+        apply_link=normalize_link("apply_url", apply_url),
+        collected_date=target_date,
     )
-    duplicate = CollectedPost(
-        source="inthiswork",
-        external_id="2",
-        title="Backend Engineer Duplicate",
-        original_url="https://inthiswork.com/archives/1",
-        normalized_url="https://inthiswork.com/archives/1",
-        normalized_url_hash="hash-1",
-        normalization_rule="inthiswork_archives",
-        collected_date=date(2026, 6, 4),
+
+
+def _column_names(connection, table_name: str) -> set[str]:
+    return {
+        row["name"]
+        for row in connection.execute(f'PRAGMA table_info("{table_name}")')
+    }
+
+
+def test_database_storage_writes_only_sources_and_job_posts(
+    tmp_path,
+) -> None:
+    apply_url = (
+        "https://makinarocks.career.greetinghr.com/ko/o/157208"
+        "?utm_source=inthiswork&ref=career"
+    )
+    duplicate_apply_url = (
+        "https://makinarocks.career.greetinghr.com/ko/o/157208"
+        "?fbclid=abc&ref=career"
     )
     db_path = tmp_path / "employment.sqlite"
     storage = DatabaseStorage(db_path)
@@ -36,9 +43,29 @@ def test_database_storage_writes_run_posts_and_records(tmp_path) -> None:
         source="inthiswork",
         target_date=date(2026, 6, 4),
         raw_posts=[{"id": 1}, {"id": 2}],
-        records=[record, duplicate],
-        request_params={"tags": "191700187"},
+        records=[
+            _record("1", apply_url),
+            _record("2", duplicate_apply_url),
+        ],
     )
+
+    with connect(db_path) as connection:
+        source = connection.execute("SELECT * FROM sources").fetchone()
+        job_post = connection.execute("SELECT * FROM job_posts").fetchone()
+        counts = connection.execute(
+            """
+            SELECT
+              (SELECT COUNT(*) FROM sources) AS sources_count,
+              (SELECT COUNT(*) FROM job_posts) AS job_posts_count
+            """
+        ).fetchone()
+        tables = {
+            row["name"]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        job_post_columns = _column_names(connection, "job_posts")
 
     assert result.fetched_count == 2
     assert result.unique_count == 1
@@ -46,63 +73,156 @@ def test_database_storage_writes_run_posts_and_records(tmp_path) -> None:
     assert result.updated_count == 0
     assert result.duplicate_count == 1
 
-    with connect(db_path) as connection:
-        run = connection.execute("SELECT * FROM collection_runs").fetchone()
-        job_post = connection.execute("SELECT * FROM job_posts").fetchone()
-        source_record = connection.execute("SELECT * FROM source_records").fetchone()
-
-    assert run["status"] == "complete"
-    assert run["fetched_count"] == 2
-    assert run["inserted_count"] == 1
-    assert run["duplicate_count"] == 1
-    assert json.loads(run["request_params_json"]) == {"tags": "191700187"}
-
-    assert job_post["title"] == "Backend Engineer"
-    assert job_post["normalized_url"] == "https://inthiswork.com/archives/1"
-    assert job_post["normalized_url_hash"] == "hash-1"
-    assert job_post["first_seen_at"] == "2026-06-04"
-    assert job_post["last_seen_at"] == "2026-06-04"
-
-    assert source_record["external_id"] == "1"
+    assert tables >= {"sources", "job_posts"}
+    assert "collection_runs" not in tables
+    assert "source_records" not in tables
+    assert counts["sources_count"] == 1
+    assert counts["job_posts_count"] == 1
+    assert source["key"] == "inthiswork"
+    assert job_post["source_id"] == source["id"]
+    assert job_post["external_id"] == "1"
     assert (
-        source_record["original_url"]
-        == "https://inthiswork.com/archives/1?utm_source=x"
+        job_post["apply_url"]
+        == "https://makinarocks.career.greetinghr.com/ko/o/157208?ref=career"
     )
-    assert json.loads(source_record["categories_json"]) == [191700167]
-    assert json.loads(source_record["tags_json"]) == [191700187]
-    assert json.loads(source_record["raw_json"]) == {"id": 1}
+    assert job_post["apply_url_hash"] == normalize_link(
+        "apply_url",
+        apply_url,
+    ).normalized_url_hash
+
+    assert job_post_columns == {
+        "id",
+        "source_id",
+        "external_id",
+        "apply_url",
+        "apply_url_hash",
+        "first_seen_at",
+        "last_seen_at",
+    }
 
 
-def test_database_storage_updates_previously_seen_posts(tmp_path) -> None:
+def test_database_storage_updates_same_job_post_when_apply_link_changes(
+    tmp_path,
+) -> None:
     db_path = tmp_path / "employment.sqlite"
     storage = DatabaseStorage(db_path)
-    record = CollectedPost(
-        source="inthiswork",
-        external_id="1",
-        title="Backend Engineer",
-        original_url="https://inthiswork.com/archives/1",
-        normalized_url="https://inthiswork.com/archives/1",
-        normalized_url_hash="hash-1",
-        normalization_rule="inthiswork_archives",
-        collected_date=date(2026, 6, 4),
-    )
+    first_apply_url = "https://jobs.example.com/apply?position=backend"
+    updated_apply_url = "https://jobs.example.com/apply?position=platform"
 
-    storage.write_collection("inthiswork", date(2026, 6, 4), [{"id": 1}], [record])
+    storage.write_collection(
+        "inthiswork",
+        date(2026, 6, 4),
+        [{"id": 1}],
+        [_record("1", first_apply_url, date(2026, 6, 4))],
+    )
     result = storage.write_collection(
-        "inthiswork", date(2026, 6, 5), [{"id": 1}], [record]
+        "inthiswork",
+        date(2026, 6, 5),
+        [{"id": 1}],
+        [_record("1", updated_apply_url, date(2026, 6, 5))],
     )
 
     with connect(db_path) as connection:
         job_post = connection.execute("SELECT * FROM job_posts").fetchone()
-        source_record = connection.execute("SELECT * FROM source_records").fetchone()
-        run_count = connection.execute(
-            "SELECT COUNT(*) AS count FROM collection_runs"
+        counts = connection.execute(
+            """
+            SELECT
+              (SELECT COUNT(*) FROM sources) AS sources_count,
+              (SELECT COUNT(*) FROM job_posts) AS job_posts_count
+            """
         ).fetchone()
 
     assert result.inserted_count == 0
     assert result.updated_count == 1
+    assert counts["sources_count"] == 1
+    assert counts["job_posts_count"] == 1
+    assert job_post["external_id"] == "1"
+    assert job_post["apply_url"] == updated_apply_url
+    assert job_post["apply_url_hash"] == normalize_link(
+        "apply_url",
+        updated_apply_url,
+    ).normalized_url_hash
     assert job_post["first_seen_at"] == "2026-06-04"
     assert job_post["last_seen_at"] == "2026-06-05"
-    assert source_record["first_seen_at"] == "2026-06-04"
-    assert source_record["last_seen_at"] == "2026-06-05"
-    assert run_count["count"] == 2
+
+
+def test_initialize_database_creates_minimal_init_schema(tmp_path) -> None:
+    db_path = tmp_path / "employment.sqlite"
+
+    with connect(db_path) as connection:
+        initialize_database(connection)
+        tables = {
+            row["name"]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        job_post_columns = _column_names(connection, "job_posts")
+
+    assert tables >= {"sources", "job_posts"}
+    assert "schema_migrations" not in tables
+    assert "collection_runs" not in tables
+    assert "source_records" not in tables
+    assert job_post_columns == {
+        "id",
+        "source_id",
+        "external_id",
+        "apply_url",
+        "apply_url_hash",
+        "first_seen_at",
+        "last_seen_at",
+    }
+
+
+def test_storage_preserves_existing_database_before_applying_init_schema(
+    tmp_path,
+) -> None:
+    db_path = tmp_path / "employment.sqlite"
+
+    with connect(db_path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE collection_runs (id INTEGER PRIMARY KEY);
+            CREATE TABLE source_records (id INTEGER PRIMARY KEY);
+            CREATE TABLE stale_table (id INTEGER PRIMARY KEY);
+            """
+        )
+
+    storage = DatabaseStorage(db_path)
+    storage.write_collection(
+        source="inthiswork",
+        target_date=date(2026, 6, 4),
+        raw_posts=[{"id": 1}],
+        records=[
+            _record(
+                "1",
+                "https://jobs.example.com/apply?utm_source=inthiswork",
+            ),
+        ],
+    )
+
+    with connect(db_path) as connection:
+        tables = {
+            row["name"]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        job_post = connection.execute("SELECT * FROM job_posts").fetchone()
+        job_post_columns = _column_names(connection, "job_posts")
+
+    assert tables >= {"sources", "job_posts"}
+    assert "collection_runs" in tables
+    assert "source_records" in tables
+    assert "stale_table" in tables
+    assert job_post_columns == {
+        "id",
+        "source_id",
+        "external_id",
+        "apply_url",
+        "apply_url_hash",
+        "first_seen_at",
+        "last_seen_at",
+    }
+    assert job_post["external_id"] == "1"
+    assert job_post["apply_url"] == "https://jobs.example.com/apply"

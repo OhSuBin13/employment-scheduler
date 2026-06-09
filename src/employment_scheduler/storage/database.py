@@ -34,7 +34,6 @@ SOURCE_METADATA: dict[str, dict[str, Any]] = {
 @dataclass(frozen=True)
 class DatabaseStorageResult:
     db_path: Path
-    run_id: int
     fetched_count: int
     unique_count: int
     inserted_count: int
@@ -43,7 +42,10 @@ class DatabaseStorageResult:
 
 
 class DatabaseStorage:
-    def __init__(self, db_path: Path | str = DEFAULT_DB_PATH) -> None:
+    def __init__(
+        self,
+        db_path: Path | str = DEFAULT_DB_PATH,
+    ) -> None:
         self.db_path = Path(db_path)
 
     def write_collection(
@@ -52,65 +54,45 @@ class DatabaseStorage:
         target_date: date,
         raw_posts: list[dict[str, Any]],
         records: list[CollectedPost],
-        request_params: dict[str, Any] | None = None,
     ) -> DatabaseStorageResult:
-        unique_records = _deduplicate_records(records)
-        duplicate_count = len(records) - len(unique_records)
-        raw_posts_by_external_id = _raw_posts_by_external_id(raw_posts)
-
         connection = connect(self.db_path)
         try:
             initialize_database(connection)
             source_id = _ensure_source(connection, source)
-            run_id = _start_collection_run(
-                connection=connection,
-                source_id=source_id,
-                target_date=target_date,
-                request_params=request_params or {},
-            )
 
             inserted_count = 0
             updated_count = 0
-            for record in unique_records:
-                job_post_id, inserted = _upsert_job_post(
-                    connection=connection,
-                    source_id=source_id,
-                    record=record,
-                    seen_at=target_date.isoformat(),
+            job_post_ids_by_hash: dict[str, int] = {}
+            seen_at = target_date.isoformat()
+            for record in records:
+                job_post_id = job_post_ids_by_hash.get(
+                    record.apply_link.normalized_url_hash
                 )
-                if inserted:
-                    inserted_count += 1
-                else:
-                    updated_count += 1
+                if job_post_id is None:
+                    job_post_id, inserted = _upsert_job_post(
+                        connection=connection,
+                        source_id=source_id,
+                        record=record,
+                        seen_at=seen_at,
+                    )
+                    job_post_ids_by_hash[record.apply_link.normalized_url_hash] = (
+                        job_post_id
+                    )
+                    if inserted:
+                        inserted_count += 1
+                    else:
+                        updated_count += 1
 
-                _upsert_source_record(
-                    connection=connection,
-                    source_id=source_id,
-                    job_post_id=job_post_id,
-                    collection_run_id=run_id,
-                    record=record,
-                    raw_post=raw_posts_by_external_id.get(record.external_id),
-                    seen_at=target_date.isoformat(),
-                )
-
-            _finish_collection_run(
-                connection=connection,
-                run_id=run_id,
-                status="complete",
-                fetched_count=len(raw_posts),
-                inserted_count=inserted_count,
-                updated_count=updated_count,
-                duplicate_count=duplicate_count,
-            )
+            unique_count = len(job_post_ids_by_hash)
+            duplicate_count = len(records) - unique_count
             connection.commit()
         finally:
             connection.close()
 
         return DatabaseStorageResult(
             db_path=self.db_path,
-            run_id=run_id,
             fetched_count=len(raw_posts),
-            unique_count=len(unique_records),
+            unique_count=unique_count,
             inserted_count=inserted_count,
             updated_count=updated_count,
             duplicate_count=duplicate_count,
@@ -192,238 +174,95 @@ def _ensure_source(connection: sqlite3.Connection, source: str) -> int:
     return int(cursor.lastrowid)
 
 
-def _start_collection_run(
-    connection: sqlite3.Connection,
-    source_id: int,
-    target_date: date,
-    request_params: dict[str, Any],
-) -> int:
-    cursor = connection.execute(
-        """
-        INSERT INTO collection_runs (
-          source_id, mode, target_date, status, request_params_json, started_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            source_id,
-            "daily",
-            target_date.isoformat(),
-            "running",
-            _dump_json(request_params),
-            _utc_now(),
-        ),
-    )
-    return int(cursor.lastrowid)
-
-
-def _finish_collection_run(
-    connection: sqlite3.Connection,
-    run_id: int,
-    status: str,
-    fetched_count: int,
-    inserted_count: int,
-    updated_count: int,
-    duplicate_count: int,
-) -> None:
-    connection.execute(
-        """
-        UPDATE collection_runs
-        SET status = ?,
-            fetched_count = ?,
-            inserted_count = ?,
-            updated_count = ?,
-            duplicate_count = ?,
-            finished_at = ?
-        WHERE id = ?
-        """,
-        (
-            status,
-            fetched_count,
-            inserted_count,
-            updated_count,
-            duplicate_count,
-            _utc_now(),
-            run_id,
-        ),
-    )
-
-
 def _upsert_job_post(
     connection: sqlite3.Connection,
     source_id: int,
     record: CollectedPost,
     seen_at: str,
 ) -> tuple[int, bool]:
-    existing = connection.execute(
-        "SELECT id FROM job_posts WHERE normalized_url_hash = ?",
-        (record.normalized_url_hash,),
-    ).fetchone()
+    existing = _find_job_post_for_record(connection, source_id, record)
 
     if existing is None:
         cursor = connection.execute(
             """
             INSERT INTO job_posts (
-              normalized_url,
-              normalized_url_hash,
-              title,
-              excerpt_text,
+              source_id,
+              external_id,
+              apply_url,
+              apply_url_hash,
               first_seen_at,
-              last_seen_at,
-              latest_source_id,
-              latest_source_published_at,
-              latest_source_modified_at
+              last_seen_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
-                record.normalized_url,
-                record.normalized_url_hash,
-                record.title,
-                record.excerpt_text,
-                seen_at,
-                seen_at,
                 source_id,
-                record.source_published_at,
-                record.source_modified_at,
+                record.external_id,
+                record.apply_link.normalized_url,
+                record.apply_link.normalized_url_hash,
+                seen_at,
+                seen_at,
             ),
         )
         return int(cursor.lastrowid), True
 
-    connection.execute(
-        """
-        UPDATE job_posts
-        SET normalized_url = ?,
-            title = ?,
-            excerpt_text = ?,
-            last_seen_at = ?,
-            latest_source_id = ?,
-            latest_source_published_at = ?,
-            latest_source_modified_at = ?
-        WHERE id = ?
-        """,
-        (
-            record.normalized_url,
-            record.title,
-            record.excerpt_text,
-            seen_at,
-            source_id,
-            record.source_published_at,
-            record.source_modified_at,
-            existing["id"],
-        ),
-    )
-    return int(existing["id"]), False
+    job_post_id = int(existing["id"])
+    _update_job_post(connection, job_post_id, source_id, record, seen_at)
+    return job_post_id, False
 
 
-def _upsert_source_record(
+def _find_job_post_for_record(
     connection: sqlite3.Connection,
     source_id: int,
-    job_post_id: int,
-    collection_run_id: int,
     record: CollectedPost,
-    raw_post: dict[str, Any] | None,
-    seen_at: str,
-) -> None:
+) -> sqlite3.Row | None:
     existing = connection.execute(
         """
         SELECT id
-        FROM source_records
+        FROM job_posts
         WHERE source_id = ? AND external_id = ?
         """,
         (source_id, record.external_id),
     ).fetchone()
-
-    values = (
-        job_post_id,
-        collection_run_id,
-        record.original_url,
-        record.normalized_url,
-        record.title,
-        record.source_published_at,
-        record.source_modified_at,
-        _dump_json(list(record.categories)),
-        _dump_json(list(record.tags)),
-        _dump_json(raw_post) if raw_post is not None else None,
-        seen_at,
-    )
-
     if existing is not None:
-        connection.execute(
-            """
-            UPDATE source_records
-            SET job_post_id = ?,
-                collection_run_id = ?,
-                original_url = ?,
-                normalized_url = ?,
-                title_raw = ?,
-                source_published_at = ?,
-                source_modified_at = ?,
-                categories_json = ?,
-                tags_json = ?,
-                raw_json = ?,
-                last_seen_at = ?
-            WHERE id = ?
-            """,
-            (*values, existing["id"]),
-        )
-        return
+        return existing
 
+    return connection.execute(
+        """
+        SELECT id
+        FROM job_posts
+        WHERE apply_url_hash = ?
+        """,
+        (record.apply_link.normalized_url_hash,),
+    ).fetchone()
+
+
+def _update_job_post(
+    connection: sqlite3.Connection,
+    job_post_id: int,
+    source_id: int,
+    record: CollectedPost,
+    seen_at: str,
+) -> None:
     connection.execute(
         """
-        INSERT INTO source_records (
-          source_id,
-          job_post_id,
-          collection_run_id,
-          external_id,
-          original_url,
-          normalized_url,
-          title_raw,
-          source_published_at,
-          source_modified_at,
-          categories_json,
-          tags_json,
-          raw_json,
-          first_seen_at,
-          last_seen_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        UPDATE job_posts
+        SET source_id = ?,
+            external_id = ?,
+            apply_url = ?,
+            apply_url_hash = ?,
+            last_seen_at = ?
+        WHERE id = ?
         """,
         (
             source_id,
-            job_post_id,
-            collection_run_id,
             record.external_id,
-            record.original_url,
-            record.normalized_url,
-            record.title,
-            record.source_published_at,
-            record.source_modified_at,
-            _dump_json(list(record.categories)),
-            _dump_json(list(record.tags)),
-            _dump_json(raw_post) if raw_post is not None else None,
+            record.apply_link.normalized_url,
+            record.apply_link.normalized_url_hash,
             seen_at,
-            seen_at,
+            job_post_id,
         ),
     )
-
-
-def _deduplicate_records(records: list[CollectedPost]) -> list[CollectedPost]:
-    unique: dict[str, CollectedPost] = {}
-    for record in records:
-        unique.setdefault(record.normalized_url_hash, record)
-    return list(unique.values())
-
-
-def _raw_posts_by_external_id(
-    raw_posts: list[dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    indexed: dict[str, dict[str, Any]] = {}
-    for post in raw_posts:
-        external_id = post.get("id")
-        if external_id is not None:
-            indexed.setdefault(str(external_id), post)
-    return indexed
 
 
 def _dump_json(value: Any) -> str:

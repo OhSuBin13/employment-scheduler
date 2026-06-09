@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from html import unescape
 from typing import Any
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from bs4 import BeautifulSoup
@@ -26,7 +27,7 @@ def build_it_posts_params(
         "categories": "191700167",
         "per_page": per_page,
         "page": page,
-        "_fields": "id,date,modified,link,title,categories,tags,excerpt,content",
+        "_fields": "id,content.rendered",
         "after": f"{before_date.isoformat()}T00:00:00",
         "before": f"{target_date.isoformat()}T00:00:00",
     }
@@ -56,56 +57,43 @@ def build_it_post_records(
 
 def build_it_post_record(post: dict[str, Any], target_date: date) -> CollectedPost:
     external_id = post.get("id")
-    link = post.get("link")
 
     if external_id is None:
         raise ValueError("Inthiswork post is missing an id")
-    if not isinstance(link, str) or not link:
-        raise ValueError("Inthiswork post is missing a link")
 
-    normalized = normalize_link(SOURCE_KEY, link)
+    apply_url = _extract_apply_url(post.get("content"))
+    if apply_url is None:
+        raise ValueError("Inthiswork post is missing a '지원하러 가기' link")
 
     return CollectedPost(
         source=SOURCE_KEY,
         external_id=str(external_id),
-        title=_extract_rendered_text(post.get("title"), "title", required=True)
-        or "(untitled)",
-        original_url=normalized.original_url,
-        normalized_url=normalized.normalized_url,
-        normalized_url_hash=normalized.normalized_url_hash,
-        normalization_rule=normalized.normalization_rule,
+        apply_link=normalize_link("apply_url", apply_url),
         collected_date=target_date,
-        source_published_at=_optional_string(post.get("date")),
-        source_modified_at=_optional_string(post.get("modified")),
-        categories=_as_tuple(post.get("categories")),
-        tags=_as_tuple(post.get("tags")),
-        excerpt_text=_extract_rendered_text(
-            post.get("excerpt"), "excerpt", required=False
-        )
-        or None,
     )
 
 
-def _extract_rendered_text(value: Any, field_name: str, *, required: bool) -> str:
-    if value is None and not required:
-        return ""
+def _extract_apply_url(content: Any) -> str | None:
+    if not isinstance(content, dict):
+        return None
 
-    if not isinstance(value, dict):
-        raise ValueError(f"Expected {field_name} to be a dict with a 'rendered' field")
+    rendered = content.get("rendered", "")
+    if not isinstance(rendered, str) or not rendered:
+        return None
 
-    rendered = value.get("rendered", "")
+    soup = BeautifulSoup(rendered, "html.parser")
+    for anchor in soup.find_all("a", href=True):
+        label = " ".join(anchor.get_text(" ", strip=True).split())
+        if "지원하러 가기" not in label:
+            continue
 
-    if not isinstance(rendered, str):
-        raise ValueError(f"Expected {field_name}.rendered to be a string")
+        href = anchor.get("href")
+        if not isinstance(href, str):
+            continue
 
-    return unescape(BeautifulSoup(rendered, "html.parser").get_text(" ", strip=True))
+        url = urljoin("https://inthiswork.com", unescape(href).strip())
+        parsed = urlsplit(url)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            return url
 
-
-def _optional_string(value: Any) -> str | None:
-    return value if isinstance(value, str) else None
-
-
-def _as_tuple(value: Any) -> tuple[Any, ...]:
-    if isinstance(value, list):
-        return tuple(value)
-    return ()
+    return None

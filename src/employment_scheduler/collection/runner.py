@@ -11,7 +11,6 @@ from employment_scheduler.models import CollectionOptions
 from employment_scheduler.sources.inthiswork import (
     SOURCE_KEY as INTHISWORK_SOURCE_KEY,
     build_it_post_records,
-    build_it_posts_params,
     fetch_it_posts,
 )
 from employment_scheduler.storage.database import DatabaseStorage
@@ -41,7 +40,6 @@ def run_collection(
     else:
         client_context = nullcontext(client)
 
-    request_params = build_it_posts_params(options.target_date)
     with client_context as active_client:
         raw_posts = fetch_it_posts(active_client, options.target_date)
 
@@ -51,7 +49,6 @@ def run_collection(
         target_date=options.target_date,
         raw_posts=raw_posts,
         records=records,
-        request_params=request_params,
     )
 
     print(
@@ -63,7 +60,6 @@ def run_collection(
         f"inserted={result.inserted_count} "
         f"updated={result.updated_count} "
         f"duplicates={result.duplicate_count} "
-        f"run_id={result.run_id} "
         f"db={result.db_path}"
     )
     return 0
