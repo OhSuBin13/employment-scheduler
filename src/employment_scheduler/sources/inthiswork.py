@@ -15,7 +15,6 @@ from employment_scheduler.normalization import normalize_link
 
 BASE_URL = "https://inthiswork.com/wp-json/wp/v2/posts"
 SOURCE_KEY = "inthiswork"
-TIMEZONE = "Asia/Seoul"
 
 
 def build_it_posts_params(

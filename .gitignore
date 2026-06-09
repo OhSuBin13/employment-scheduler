@@ -15,3 +15,9 @@ data/raw/*
 !data/raw/inthiswork/
 data/raw/inthiswork/*
 !data/raw/inthiswork/.gitkeep
+
+data/analysis/*
+!data/analysis/.gitkeep
+!data/analysis/apply_urls/
+data/analysis/apply_urls/*
+!data/analysis/apply_urls/.gitkeep

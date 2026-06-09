@@ -29,6 +29,8 @@ employment-scheduler/
 ```bash
 python scripts/collect_today.py --source inthiswork --date 2026-06-04
 python scripts/collect_today.py --source inthiswork --dry-run
+python scripts/analyze_apply_urls.py --source inthiswork --limit 3
+python scripts/analyze_apply_urls.py --job-post-id 1 --force
 ```
 
 The current implementation collects Inthiswork IT posts and stores normalized records in SQLite:
@@ -39,5 +41,9 @@ The current implementation collects Inthiswork IT posts and stores normalized re
   delete an existing database file. Remove `data/employment.sqlite` first when a
   clean rebuild is needed.
 - Inthiswork responses are limited to the post id and rendered content needed to extract the `지원하러 가기` link.
+- `scripts/analyze_apply_urls.py` reads stored `job_posts.apply_url` rows and
+  runs `codex exec` with `gpt-5.5`, `model_reasoning_effort="xhigh"`, and
+  `service_tier="priority"` by default. Reports are written under
+  `data/analysis/apply_urls/` and are ignored by git.
 
 Generated SQLite files are ignored by git.

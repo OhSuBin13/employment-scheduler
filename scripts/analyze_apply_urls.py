@@ -1,0 +1,18 @@
+#!/usr/bin/env python
+"""Run Codex analysis for apply URLs stored in the local SQLite database."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from employment_scheduler.analysis.codex_apply_urls import main  # noqa: E402
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
