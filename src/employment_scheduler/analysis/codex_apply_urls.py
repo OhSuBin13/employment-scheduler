@@ -102,7 +102,7 @@ def run_apply_url_analysis(
     runner = run_command or _run_codex_command
     if options.workers == 1:
         return [
-            _analyze_target(target=target, options=options, runner=runner)
+            _analyze_target_safely(target=target, options=options, runner=runner)
             for target in targets
         ]
 
@@ -111,7 +111,7 @@ def run_apply_url_analysis(
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_indexes = {
             executor.submit(
-                _analyze_target,
+                _analyze_target_safely,
                 target=target,
                 options=options,
                 runner=runner,
@@ -120,11 +120,7 @@ def run_apply_url_analysis(
         }
         for future in as_completed(future_indexes):
             index = future_indexes[future]
-            target = targets[index]
-            try:
-                results[index] = future.result()
-            except Exception as exc:  # noqa: BLE001
-                results[index] = _failed_result(target, options, str(exc))
+            results[index] = future.result()
 
     return [result for result in results if result is not None]
 
@@ -175,6 +171,17 @@ def _analyze_target(
         status="analyzed",
         command=tuple(command),
     )
+
+
+def _analyze_target_safely(
+    target: JobPostAnalysisTarget,
+    options: CodexApplyUrlAnalysisOptions,
+    runner: CommandRunner,
+) -> CodexApplyUrlAnalysisResult:
+    try:
+        return _analyze_target(target=target, options=options, runner=runner)
+    except Exception as exc:  # noqa: BLE001
+        return _failed_result(target, options, str(exc))
 
 
 def _failed_result(

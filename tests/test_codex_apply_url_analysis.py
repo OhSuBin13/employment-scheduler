@@ -5,6 +5,8 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from employment_scheduler.analysis.codex_apply_urls import (
     CodexApplyUrlAnalysisOptions,
     build_analysis_prompt,
@@ -201,8 +203,10 @@ def test_run_apply_url_analysis_writes_prompt_and_uses_output_file(
     assert "apply_url: https://nxt.career.greetinghr.com/ko/o/219827" in calls[0][1]
 
 
-def test_run_apply_url_analysis_with_workers_keeps_going_after_failure(
+@pytest.mark.parametrize("workers", [1, 2])
+def test_run_apply_url_analysis_keeps_going_after_failure(
     tmp_path,
+    workers: int,
 ) -> None:
     db_path = tmp_path / "employment.sqlite"
     first_job_post_id = _seed_job_post(
@@ -232,7 +236,7 @@ def test_run_apply_url_analysis_with_workers_keeps_going_after_failure(
         CodexApplyUrlAnalysisOptions(
             db_path=db_path,
             output_dir=tmp_path,
-            workers=2,
+            workers=workers,
         ),
         run_command=fake_runner,
     )
