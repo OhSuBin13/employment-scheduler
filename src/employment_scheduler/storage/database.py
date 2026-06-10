@@ -181,9 +181,10 @@ def _upsert_job_post(
               apply_url,
               apply_url_hash,
               first_seen_at,
-              last_seen_at
+              last_seen_at,
+              title
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 source_id,
@@ -192,6 +193,7 @@ def _upsert_job_post(
                 record.apply_link.normalized_url_hash,
                 seen_at,
                 seen_at,
+                record.title,
             ),
         )
         return int(cursor.lastrowid), True
@@ -241,7 +243,8 @@ def _update_job_post(
             external_id = ?,
             apply_url = ?,
             apply_url_hash = ?,
-            last_seen_at = ?
+            last_seen_at = ?,
+            title = ?
         WHERE id = ?
         """,
         (
@@ -250,6 +253,7 @@ def _update_job_post(
             record.apply_link.normalized_url,
             record.apply_link.normalized_url_hash,
             seen_at,
+            record.title,
             job_post_id,
         ),
     )

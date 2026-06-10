@@ -7,7 +7,7 @@ from employment_scheduler.analysis.models import JobPostAnalysisTarget
 def select_analysis_targets(
     db_path: Path,
     source: str | None = None,
-    job_post_ids: tuple[int, ...] = (),
+    seen_at: str | None = None,
     limit: int | None = None,
 ) -> list[JobPostAnalysisTarget]:
     if not db_path.exists():
@@ -20,10 +20,9 @@ def select_analysis_targets(
         where_clauses.append("sources.key = ?")
         params.append(source)
 
-    if job_post_ids:
-        placeholders = ", ".join("?" for _ in job_post_ids)
-        where_clauses.append(f"job_posts.id IN ({placeholders})")
-        params.extend(job_post_ids)
+    if seen_at is not None:
+        where_clauses.append("job_posts.last_seen_at = ?")
+        params.append(seen_at)
 
     where_sql = ""
     if where_clauses:

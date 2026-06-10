@@ -21,6 +21,7 @@ def test_run_collection_writes_database_outputs(tmp_path) -> None:
             "content": {
                 "rendered": f'<p><a href="{apply_url}">지원하러 가기</a></p>'
             },
+            "title": {"rendered": "Backend Engineer"},
         }
     ]
     client = httpx.Client(
@@ -42,3 +43,4 @@ def test_run_collection_writes_database_outputs(tmp_path) -> None:
 
     assert job_post["apply_url"] == normalized_apply_url
     assert job_post["external_id"] == "351552"
+    assert job_post["title"] == "Backend Engineer"

@@ -5,7 +5,7 @@ from typing import Literal
 import employment_scheduler.analysis.constants as analysis_constants
 from employment_scheduler.storage.database import DEFAULT_DB_PATH
 
-AnalysisStatus = Literal["analyzed", "planned", "skipped"]
+AnalysisStatus = Literal["analyzed", "failed", "planned", "skipped"]
 
 
 @dataclass(frozen=True)
@@ -24,17 +24,16 @@ class CodexApplyUrlAnalysisOptions:
     db_path: Path = DEFAULT_DB_PATH
     output_dir: Path = analysis_constants.DEFAULT_OUTPUT_DIR
     source: str | None = None
-    job_post_ids: tuple[int, ...] = ()
+    seen_at: str | None = None
     limit: int | None = None
+    workers: int = 1
     force: bool = False
-    dry_run: bool = False
     codex_bin: str = analysis_constants.DEFAULT_CODEX_BIN
     model: str = analysis_constants.DEFAULT_CODEX_MODEL
     reasoning_effort: str = analysis_constants.DEFAULT_REASONING_EFFORT
     service_tier: str = analysis_constants.DEFAULT_SERVICE_TIER
     sandbox: str = analysis_constants.DEFAULT_SANDBOX
     enable_search: bool = True
-    extra_codex_args: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -44,3 +43,4 @@ class CodexApplyUrlAnalysisResult:
     prompt_path: Path
     status: AnalysisStatus
     command: tuple[str, ...]
+    error_message: str | None = None

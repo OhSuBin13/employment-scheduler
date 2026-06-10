@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS job_posts (
   external_id TEXT NOT NULL,
   apply_url TEXT NOT NULL,
   apply_url_hash TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
   first_seen_at TEXT NOT NULL,
   last_seen_at TEXT NOT NULL,
   FOREIGN KEY (source_id) REFERENCES sources(id),

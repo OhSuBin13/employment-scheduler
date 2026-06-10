@@ -9,11 +9,13 @@ def _record(
     external_id: str,
     apply_url: str,
     target_date: date = date(2026, 6, 4),
+    title: str = "Backend Engineer",
 ) -> CollectedPost:
     return CollectedPost(
         source="inthiswork",
         external_id=external_id,
         apply_link=normalize_link("apply_url", apply_url),
+        title=title,
         collected_date=target_date,
     )
 
@@ -81,6 +83,7 @@ def test_database_storage_writes_only_sources_and_job_posts(
     assert source["key"] == "inthiswork"
     assert job_post["source_id"] == source["id"]
     assert job_post["external_id"] == "1"
+    assert job_post["title"] == "Backend Engineer"
     assert (
         job_post["apply_url"]
         == "https://makinarocks.career.greetinghr.com/ko/o/157208?ref=career"
@@ -96,6 +99,7 @@ def test_database_storage_writes_only_sources_and_job_posts(
         "external_id",
         "apply_url",
         "apply_url_hash",
+        "title",
         "first_seen_at",
         "last_seen_at",
     }
@@ -119,7 +123,14 @@ def test_database_storage_updates_same_job_post_when_apply_link_changes(
         "inthiswork",
         date(2026, 6, 5),
         [{"id": 1}],
-        [_record("1", updated_apply_url, date(2026, 6, 5))],
+        [
+            _record(
+                "1",
+                updated_apply_url,
+                date(2026, 6, 5),
+                title="Platform Engineer",
+            )
+        ],
     )
 
     with connect(db_path) as connection:
@@ -137,6 +148,7 @@ def test_database_storage_updates_same_job_post_when_apply_link_changes(
     assert counts["sources_count"] == 1
     assert counts["job_posts_count"] == 1
     assert job_post["external_id"] == "1"
+    assert job_post["title"] == "Platform Engineer"
     assert job_post["apply_url"] == updated_apply_url
     assert job_post["apply_url_hash"] == normalize_link(
         "apply_url",
@@ -169,6 +181,7 @@ def test_initialize_database_creates_minimal_init_schema(tmp_path) -> None:
         "external_id",
         "apply_url",
         "apply_url_hash",
+        "title",
         "first_seen_at",
         "last_seen_at",
     }
@@ -221,8 +234,10 @@ def test_storage_preserves_existing_database_before_applying_init_schema(
         "external_id",
         "apply_url",
         "apply_url_hash",
+        "title",
         "first_seen_at",
         "last_seen_at",
     }
     assert job_post["external_id"] == "1"
+    assert job_post["title"] == "Backend Engineer"
     assert job_post["apply_url"] == "https://jobs.example.com/apply"

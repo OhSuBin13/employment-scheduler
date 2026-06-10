@@ -25,4 +25,5 @@ class CollectedPost:
     source: str
     external_id: str
     apply_link: NormalizedLink
+    title: str
     collected_date: date

@@ -26,7 +26,7 @@ def build_it_posts_params(
         "categories": "191700167",
         "per_page": per_page,
         "page": page,
-        "_fields": "id,content.rendered",
+        "_fields": "id,content.rendered,title.rendered",
         "after": f"{before_date.isoformat()}T00:00:00",
         "before": f"{target_date.isoformat()}T00:00:00",
     }
@@ -64,10 +64,13 @@ def build_it_post_record(post: dict[str, Any], target_date: date) -> CollectedPo
     if apply_url is None:
         raise ValueError("Inthiswork post is missing a '지원하러 가기' link")
 
+    title = _extract_title(post.get("title"))
+
     return CollectedPost(
         source=SOURCE_KEY,
         external_id=str(external_id),
         apply_link=normalize_link("apply_url", apply_url),
+        title=title,
         collected_date=target_date,
     )
 
@@ -96,3 +99,22 @@ def _extract_apply_url(content: Any) -> str | None:
             return url
 
     return None
+
+
+def _extract_title(title: Any) -> str:
+    if not isinstance(title, dict):
+        raise ValueError("Inthiswork title is missing or not a string")
+
+    rendered = title.get("rendered")
+    if not isinstance(rendered, str):
+        raise ValueError("Inthiswork title is missing or not a string")
+
+    title_text = " ".join(
+        BeautifulSoup(unescape(rendered), "html.parser")
+        .get_text(" ", strip=True)
+        .split()
+    )
+    if not title_text:
+        raise ValueError("Inthiswork title is blank")
+
+    return title_text
