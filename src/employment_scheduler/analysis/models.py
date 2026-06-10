@@ -14,9 +14,9 @@ class JobPostAnalysisTarget:
     source_key: str
     external_id: str
     apply_url: str
-    apply_url_hash: str
     first_seen_at: str
     last_seen_at: str
+    title: str
 
 
 @dataclass(frozen=True)

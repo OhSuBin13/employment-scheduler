@@ -226,14 +226,11 @@ def build_codex_command(
 
 def build_output_path(output_dir: Path, target: JobPostAnalysisTarget) -> Path:
     seen_at = _safe_slug(target.last_seen_at)
-    external_id = _safe_slug(target.external_id)
     return (
         output_dir
         / "post"
         / seen_at
-        / (
-            f"{seen_at}-job-post-{target.job_post_id}-{external_id}-{target.apply_url_hash[:12]}.md"
-        )
+        / (f"{target.job_post_id}-{_safe_slug(target.title)}.md")
     )
 
 
@@ -288,7 +285,7 @@ def _toml_setting(key: str, value: str) -> str:
 
 
 def _safe_slug(value: str) -> str:
-    slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", value).strip("-")
+    slug = re.sub(r"[^a-zA-Z0-9가-힣._-]+", "-", value).strip("-")
     return slug or "unknown"
 
 

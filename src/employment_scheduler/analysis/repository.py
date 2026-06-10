@@ -39,9 +39,9 @@ def select_analysis_targets(
           sources.key AS source_key,
           job_posts.external_id,
           job_posts.apply_url,
-          job_posts.apply_url_hash,
           job_posts.first_seen_at,
-          job_posts.last_seen_at
+          job_posts.last_seen_at,
+          job_posts.title
         FROM job_posts
         JOIN sources ON sources.id = job_posts.source_id
         {where_sql}
@@ -62,9 +62,9 @@ def select_analysis_targets(
             source_key=str(row["source_key"]),
             external_id=str(row["external_id"]),
             apply_url=str(row["apply_url"]),
-            apply_url_hash=str(row["apply_url_hash"]),
             first_seen_at=str(row["first_seen_at"]),
             last_seen_at=str(row["last_seen_at"]),
+            title=str(row["title"]),
         )
         for row in rows
     ]

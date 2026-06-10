@@ -162,17 +162,15 @@ def test_build_analysis_prompt_includes_apply_url_metadata(tmp_path) -> None:
     assert "do not invent details" in prompt
 
 
-def test_build_output_path_includes_last_seen_at_date(tmp_path) -> None:
+def test_build_output_path_includes_last_seen_at_and_title_slug(tmp_path) -> None:
     db_path = tmp_path / "employment.sqlite"
     _seed_job_post(db_path, last_seen_at="2026-06-09")
     target = select_analysis_targets(db_path)[0]
 
     output_path = build_output_path(tmp_path, target)
 
-    assert output_path.name == (
-        f"2026-06-09-job-post-{target.job_post_id}-354304-"
-        f"{target.apply_url_hash[:12]}.md"
-    )
+    assert output_path.parent == tmp_path / "post" / "2026-06-09"
+    assert output_path.name == f"{target.job_post_id}-Backend-Engineer.md"
 
 
 def test_run_apply_url_analysis_writes_prompt_and_uses_output_file(
