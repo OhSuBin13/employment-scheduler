@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run Codex analysis for apply URLs stored in the local SQLite database."""
+"""Publish apply URL analysis reports to Notion."""
 
 from __future__ import annotations
 
@@ -11,8 +11,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from employment_scheduler.analysis.codex_apply_urls import main  # noqa: E402
-
+from employment_scheduler.analysis.service.publish_reports import main  # noqa: E402
 
 if __name__ == "__main__":
     raise SystemExit(main())

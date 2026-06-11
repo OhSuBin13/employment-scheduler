@@ -21,3 +21,15 @@ CREATE TABLE IF NOT EXISTS job_posts (
   FOREIGN KEY (source_id) REFERENCES sources(id),
   UNIQUE (source_id, external_id)
 );
+
+CREATE TABLE IF NOT EXISTS notion_publish_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_post_id INTEGER NOT NULL UNIQUE,
+  notion_page_id TEXT NOT NULL,
+  notion_url TEXT,
+  analysis_path TEXT NOT NULL,
+  analysis_hash TEXT NOT NULL,
+  published_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (job_post_id) REFERENCES job_posts(id)
+);

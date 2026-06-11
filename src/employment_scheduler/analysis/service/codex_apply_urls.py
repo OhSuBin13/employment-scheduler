@@ -4,22 +4,28 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import employment_scheduler.analysis.constants as analysis_constants
+import employment_scheduler.analysis.utils.constants as analysis_constants
 from employment_scheduler.analysis.models import (
     CodexApplyUrlAnalysisOptions,
     CodexApplyUrlAnalysisResult,
     JobPostAnalysisTarget,
 )
 from employment_scheduler.analysis.prompts import build_analysis_prompt
-from employment_scheduler.analysis.repository import select_analysis_targets
+from employment_scheduler.analysis.repository.analyze_repo import (
+    select_analysis_targets,
+)
+from employment_scheduler.analysis.utils.cli_utils import _iso_date, _positive_int
+from employment_scheduler.analysis.utils.report_paths import (
+    build_output_path,
+    build_prompt_path,
+)
 from employment_scheduler.storage.database import DEFAULT_DB_PATH
 
 CommandRunner = Callable[[Sequence[str], str], subprocess.CompletedProcess[str]]
@@ -231,21 +237,6 @@ def build_codex_command(
     return command
 
 
-def build_output_path(output_dir: Path, target: JobPostAnalysisTarget) -> Path:
-    seen_at = _safe_slug(target.last_seen_at)
-    return (
-        output_dir
-        / "post"
-        / seen_at
-        / (f"{target.job_post_id}-{_safe_slug(target.title)}.md")
-    )
-
-
-def build_prompt_path(output_dir: Path, target: JobPostAnalysisTarget) -> Path:
-    output_path = build_output_path(output_dir, target)
-    return output_dir / "prompts" / f"{output_path.stem}.prompt.md"
-
-
 def main(argv: list[str] | None = None) -> int:
     options = parse_options(argv)
     results = run_apply_url_analysis(options)
@@ -289,22 +280,3 @@ def _run_codex_command(
 
 def _toml_setting(key: str, value: str) -> str:
     return f"{key}={json.dumps(value)}"
-
-
-def _safe_slug(value: str) -> str:
-    slug = re.sub(r"[^a-zA-Z0-9가-힣._-]+", "-", value).strip("-")
-    return slug or "unknown"
-
-
-def _positive_int(value: str) -> int:
-    parsed = int(value)
-    if parsed < 1:
-        raise argparse.ArgumentTypeError("must be a positive integer")
-    return parsed
-
-
-def _iso_date(value: str) -> str:
-    try:
-        return date.fromisoformat(value).isoformat()
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("must be a YYYY-MM-DD date") from exc

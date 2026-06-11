@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from employment_scheduler.analysis.codex_apply_urls import (
+from employment_scheduler.analysis.service.codex_apply_urls import (
     CodexApplyUrlAnalysisOptions,
     build_analysis_prompt,
     build_codex_command,
-    build_output_path,
     run_apply_url_analysis,
     select_analysis_targets,
 )
+from employment_scheduler.analysis.utils.report_paths import build_output_path
 from employment_scheduler.normalization import normalize_link
 from employment_scheduler.storage.database import connect, initialize_database
 
