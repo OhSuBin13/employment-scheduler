@@ -121,4 +121,4 @@ def job_row_to_target(row: sqlite3.Row) -> JobPostAnalysisTarget:
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(timezone.utc).isoformat(timespec="minutes")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -118,7 +119,14 @@ def _publish_record(db_path: Path, job_post_id: int) -> sqlite3.Row:
     with connect(db_path) as connection:
         row = connection.execute(
             """
-            SELECT job_post_id, notion_page_id, notion_url, analysis_path, analysis_hash
+            SELECT
+              job_post_id,
+              notion_page_id,
+              notion_url,
+              analysis_path,
+              analysis_hash,
+              published_at,
+              updated_at
             FROM notion_publish_records
             WHERE job_post_id = ?
             """,
@@ -159,6 +167,8 @@ def test_publish_apply_url_reports_creates_notion_page_and_records_it(
     assert row["notion_url"] == "https://notion.so/page-1"
     assert row["analysis_path"] == str(report_path)
     assert len(row["analysis_hash"]) == 64
+    assert row["published_at"] == row["updated_at"]
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", row["published_at"]) is not None
 
 
 def test_publish_apply_url_reports_skips_same_report_hash(tmp_path) -> None:
@@ -231,6 +241,9 @@ def test_publish_apply_url_reports_updates_existing_page_when_report_changes(
     assert "수정됨" in update_client.updated[0][1]
     after = _publish_record(db_path, job_post_id)["analysis_hash"]
     assert after != before
+    row = _publish_record(db_path, job_post_id)
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", row["published_at"]) is not None
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", row["updated_at"]) is not None
 
 
 def test_publish_apply_url_reports_dry_run_plans_create_without_notion_parent(

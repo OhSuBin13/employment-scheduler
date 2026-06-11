@@ -1,8 +1,12 @@
 import sqlite3
+from datetime import datetime, timezone
 
 from employment_scheduler.analysis.models import PublishApplyUrlReportTarget
-from employment_scheduler.analysis.repository.analyze_repo import utc_now
 from employment_scheduler.notion.client import NotionPage
+
+
+def _utc_today() -> str:
+    return datetime.now(timezone.utc).date().isoformat()
 
 
 def get_notion_publish_record(
@@ -24,7 +28,7 @@ def insert_notion_publish_record(
     report_target: PublishApplyUrlReportTarget,
     page: NotionPage,
 ) -> None:
-    now = utc_now()
+    today = _utc_today()
     connection.execute(
         """
         INSERT INTO notion_publish_records (
@@ -44,8 +48,8 @@ def insert_notion_publish_record(
             page.url,
             str(report_target.report_path),
             report_target.markdown_hash,
-            now,
-            now,
+            today,
+            today,
         ),
     )
 
@@ -70,7 +74,7 @@ def update_notion_publish_record(
             page.url,
             str(report_target.report_path),
             report_target.markdown_hash,
-            utc_now(),
+            _utc_today(),
             report_target.target.job_post_id,
         ),
     )
