@@ -2,11 +2,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-import employment_scheduler.analysis.constants as analysis_constants
+import employment_scheduler.analysis.utils.constants as analysis_constants
 from employment_scheduler.notion.client import NotionParent
 from employment_scheduler.storage.database import DEFAULT_DB_PATH
 
-AnalysisStatus = Literal["analyzed", "failed", "planned", "skipped"]
+AnalysisStatus = Literal["analyzed", "failed", "skipped"]
 PublishStatus = Literal[
     "created",
     "updated",

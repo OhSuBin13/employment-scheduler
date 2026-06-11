@@ -7,13 +7,15 @@ from pathlib import Path
 
 import httpx
 
-from employment_scheduler.analysis.publish_reports import (
+from employment_scheduler.analysis.repository.analyze_repo import (
+    select_analysis_target_by_job_post_id,
+)
+from employment_scheduler.analysis.service.publish_reports import (
     PublishApplyUrlReportsOptions,
     build_notion_markdown,
     parse_options,
     publish_apply_url_reports,
 )
-from employment_scheduler.analysis.repository import select_analysis_target_by_job_post_id
 from employment_scheduler.normalization import normalize_link
 from employment_scheduler.notion.client import NotionClient, NotionPage, NotionParent
 from employment_scheduler.storage.database import connect, initialize_database
@@ -329,8 +331,7 @@ def test_notion_client_creates_page_with_supported_page_payload() -> None:
         == "보고서"
     )
     assert (
-        payload["children"][1]["paragraph"]["rich_text"][0]["text"]["content"]
-        == "본문"
+        payload["children"][1]["paragraph"]["rich_text"][0]["text"]["content"] == "본문"
     )
 
 

@@ -4,28 +4,34 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import re
 import sqlite3
 import sys
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
-import employment_scheduler.analysis.constants as analysis_constants
+import employment_scheduler.analysis.utils.constants as analysis_constants
 from employment_scheduler.analysis.models import (
     JobPostAnalysisTarget,
     PublishApplyUrlReportResult,
     PublishApplyUrlReportsOptions,
     PublishApplyUrlReportTarget,
 )
-from employment_scheduler.analysis.repository import (
+from employment_scheduler.analysis.repository.analyze_repo import (
+    select_analysis_targets_by_job_post_ids,
+)
+from employment_scheduler.analysis.repository.publish_repo import (
     get_notion_publish_record,
     insert_notion_publish_record,
-    select_analysis_targets_by_job_post_ids,
     update_notion_publish_record,
+)
+from employment_scheduler.analysis.utils.cli_utils import _iso_date, _positive_int
+from employment_scheduler.analysis.utils.report_paths import (
+    find_report_paths,
+    parse_job_post_id,
 )
 from employment_scheduler.notion.client import (
     NotionClient,
@@ -178,9 +184,9 @@ def select_publish_targets(
     if options.seen_at is None:
         raise ValueError("seen_at is required")
 
-    report_paths = _find_report_paths(options.output_dir, options.seen_at)
+    report_paths = find_report_paths(options.output_dir, options.seen_at)
     job_post_ids_by_path = {
-        report_path: _parse_job_post_id(report_path) for report_path in report_paths
+        report_path: parse_job_post_id(report_path) for report_path in report_paths
     }
     targets_by_id = {
         target.job_post_id: target
@@ -382,20 +388,6 @@ def _update_existing_page(
     )
 
 
-def _find_report_paths(output_dir: Path, seen_at: str) -> list[Path]:
-    reports_dir = output_dir / "post" / seen_at
-    if not reports_dir.exists():
-        return []
-    return sorted(path for path in reports_dir.glob("*.md") if path.is_file())
-
-
-def _parse_job_post_id(report_path: Path) -> int:
-    match = re.match(r"^(\d+)-", report_path.name)
-    if match is None:
-        raise ValueError(f"Cannot parse job_post_id from report file: {report_path}")
-    return int(match.group(1))
-
-
 def _failed_result(
     report_target: PublishApplyUrlReportTarget,
     error_message: str,
@@ -415,17 +407,3 @@ def _hash_text(value: str) -> str:
 def _optional_row_str(row: sqlite3.Row, key: str) -> str | None:
     value = row[key]
     return value if isinstance(value, str) and value else None
-
-
-def _positive_int(value: str) -> int:
-    parsed = int(value)
-    if parsed < 1:
-        raise argparse.ArgumentTypeError("must be a positive integer")
-    return parsed
-
-
-def _iso_date(value: str) -> str:
-    try:
-        return date.fromisoformat(value).isoformat()
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("must be a YYYY-MM-DD date") from exc
