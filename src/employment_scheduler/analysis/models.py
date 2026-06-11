@@ -3,9 +3,18 @@ from pathlib import Path
 from typing import Literal
 
 import employment_scheduler.analysis.constants as analysis_constants
+from employment_scheduler.notion.client import NotionParent
 from employment_scheduler.storage.database import DEFAULT_DB_PATH
 
 AnalysisStatus = Literal["analyzed", "failed", "planned", "skipped"]
+PublishStatus = Literal[
+    "created",
+    "updated",
+    "skipped",
+    "planned_create",
+    "planned_update",
+    "failed",
+]
 
 
 @dataclass(frozen=True)
@@ -43,4 +52,34 @@ class CodexApplyUrlAnalysisResult:
     prompt_path: Path
     status: AnalysisStatus
     command: tuple[str, ...]
+    error_message: str | None = None
+
+
+@dataclass(frozen=True)
+class PublishApplyUrlReportsOptions:
+    db_path: Path = DEFAULT_DB_PATH
+    output_dir: Path = analysis_constants.DEFAULT_OUTPUT_DIR
+    seen_at: str | None = None
+    source: str | None = None
+    limit: int | None = None
+    force: bool = False
+    dry_run: bool = False
+    notion_parent: NotionParent | None = None
+
+
+@dataclass(frozen=True)
+class PublishApplyUrlReportTarget:
+    target: JobPostAnalysisTarget
+    report_path: Path
+    markdown: str
+    markdown_hash: str
+
+
+@dataclass(frozen=True)
+class PublishApplyUrlReportResult:
+    target: JobPostAnalysisTarget | None
+    report_path: Path
+    status: PublishStatus
+    notion_page_id: str | None = None
+    notion_url: str | None = None
     error_message: str | None = None

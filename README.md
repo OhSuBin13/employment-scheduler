@@ -31,6 +31,8 @@ python scripts/collect_today.py --source inthiswork --date 2026-06-04
 python scripts/analyze_apply_urls.py --source inthiswork --limit 3
 python scripts/analyze_apply_urls.py --source inthiswork --seen-at 2026-06-09 --limit 20 --workers 3
 python scripts/analyze_apply_urls.py --source inthiswork --seen-at 2026-06-09 --force
+python scripts/publish_apply_url_reports.py --seen-at 2026-06-09 --dry-run
+python scripts/publish_apply_url_reports.py --seen-at 2026-06-09
 ```
 
 The current implementation collects Inthiswork IT posts and stores normalized records in SQLite:
@@ -45,5 +47,12 @@ The current implementation collects Inthiswork IT posts and stores normalized re
   runs `codex exec` with `gpt-5.5`, `model_reasoning_effort="high"`, and
   `service_tier="priority"` by default. Reports are written under
   `data/analysis/apply_urls/` and are ignored by git.
+- `scripts/publish_apply_url_reports.py` reads Markdown reports from
+  `data/analysis/apply_urls/post/<seen-at>/`, creates or updates Notion pages,
+  and records the Notion page id in SQLite to avoid duplicate pages. Set
+  `NOTION_API_KEY` and one of `NOTION_DATA_SOURCE_ID`, `NOTION_DATABASE_ID`, or
+  `NOTION_PARENT_PAGE_ID` before running it without `--dry-run`. The CLI reads
+  these values from shell environment variables or a repo-root `.env` file via
+  `python-dotenv`.
 
 Generated SQLite files are ignored by git.
